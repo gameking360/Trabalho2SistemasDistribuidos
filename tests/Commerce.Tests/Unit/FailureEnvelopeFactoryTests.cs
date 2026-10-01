@@ -46,7 +46,7 @@ public sealed class FailureEnvelopeFactoryTests
         // mas o exchange original continua registrado nos cabeçalhos.
         var body = MessageJson.Serialize(TestMessages.Notification());
         var firstAttemptAt = Now.AddSeconds(-7);
-        var delivery = new DeliveryContext("notificacao-1", Queues.Notifications, "", Queues.Notifications, body, false,
+        var delivery = new DeliveryContext("notificacao-1", Queues.Notifications, "", Queues.Notifications, body,
             new RetryMetadata(2, firstAttemptAt, Exchanges.Notifications, RoutingKeys.Notifications, body));
 
         var envelope = _factory.CreateRetryEnvelope(new FailedDelivery(delivery, Now, "Falha ao processar notificação"));
@@ -92,7 +92,7 @@ public sealed class FailureEnvelopeFactoryTests
     {
         var body = MessageJson.Serialize(TestMessages.Notification());
         var firstAttemptAt = Now.AddSeconds(-30);
-        var delivery = new DeliveryContext("notificacao-1", Queues.Notifications, "", Queues.Notifications, body, false,
+        var delivery = new DeliveryContext("notificacao-1", Queues.Notifications, "", Queues.Notifications, body,
             new RetryMetadata(5, firstAttemptAt, Exchanges.Notifications, RoutingKeys.Notifications, body));
 
         var deadLetter = _factory.CreateDeadLetterMessage(new FailedDelivery(delivery, Now, "Falha ao processar notificação"));
@@ -112,7 +112,7 @@ public sealed class FailureEnvelopeFactoryTests
     }
 
     private static DeliveryContext FirstDelivery(byte[] body) =>
-        new(ExtractMessageId(body), Queues.Movements, Exchanges.Movements, RoutingKeys.MovementProcess, body, false, RetryMetadata.None);
+        new(ExtractMessageId(body), Queues.Movements, Exchanges.Movements, RoutingKeys.MovementProcess, body, RetryMetadata.None);
 
     private static string ExtractMessageId(byte[] body)
     {

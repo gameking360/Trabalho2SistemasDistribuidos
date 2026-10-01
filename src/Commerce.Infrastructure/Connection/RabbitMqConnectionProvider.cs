@@ -15,8 +15,7 @@ public sealed class RabbitMqConnectionProvider(
 
     public async Task<IConnection> GetConnectionAsync(CancellationToken cancellationToken = default)
     {
-        // Depois da primeira conexão, quedas são tratadas pela recuperação automática do client, que reabre
-        // a conexão, os canais e os consumidores. Por isso a mesma instância é reaproveitada.
+        // Quedas posteriores são tratadas pela recuperação automática do client.
         if (_connection is not null)
             return _connection;
 
@@ -86,7 +85,6 @@ public sealed class RabbitMqConnectionProvider(
     {
         if (_connection is not null)
         {
-            // Fechamento educado apenas se a conexão estiver aberta; durante uma reconexão basta descartá-la.
             if (_connection.IsOpen)
                 await _connection.CloseAsync();
 

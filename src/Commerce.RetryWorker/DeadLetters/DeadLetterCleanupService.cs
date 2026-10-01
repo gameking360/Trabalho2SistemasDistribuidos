@@ -6,8 +6,8 @@ using RabbitMQ.Client;
 namespace Commerce.RetryWorker.DeadLetters;
 
 /// <summary>
-/// Limpeza periódica da DLQ, desabilitada por padrão. Quando habilitada, remove apenas mensagens isoladas há mais
-/// tempo que o período de retenção e registra cada remoção no log, para que nada seja descartado em silêncio.
+/// Limpeza periódica da DLQ: remove apenas mensagens isoladas há mais tempo que o período de retenção,
+/// registrando cada remoção no log.
 /// </summary>
 public sealed class DeadLetterCleanupService(
     IRabbitMqConnectionProvider connectionProvider,

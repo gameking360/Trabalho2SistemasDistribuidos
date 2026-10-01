@@ -9,8 +9,7 @@ namespace Commerce.StockWorker;
 
 public static class StockWorkerServiceCollectionExtensions
 {
-    // Prefetch 1 + um único consumidor ativo (x-single-active-consumer na fila): o broker só entrega a próxima
-    // movimentação depois do ack da atual, então elas são processadas na ordem em que entraram na fila.
+    // Prefetch 1 + single active consumer: uma movimentação por vez, na ordem da fila.
     private const ushort SequentialPrefetch = 1;
 
     public static IServiceCollection AddStockWorker(this IServiceCollection services, IConfiguration configuration)

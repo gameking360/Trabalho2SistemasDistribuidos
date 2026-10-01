@@ -33,8 +33,7 @@ public sealed class StockMovementRequestService(
         if (errors.Count > 0)
             return MovementRequestResult.Invalid(movement.MessageId, errors);
 
-        // A API apenas publica e responde: o processamento do estoque acontece no Stock Worker.
-        // Só respondemos 202 depois do publisher confirm, ou seja, quando a mensagem já está persistida no broker.
+        // O 202 só é devolvido após o publisher confirm (mensagem persistida no broker).
         try
         {
             await publisher.PublishAsync(

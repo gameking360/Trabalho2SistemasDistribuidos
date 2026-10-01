@@ -17,7 +17,7 @@ public static class NotificationMessageValidator
         if (string.IsNullOrWhiteSpace(message.NotificationType))
             errors.Add(new ValidationError("notificationType", "O tipo da notificação é obrigatório."));
 
-        if (message.Recipients is null || !message.Recipients.Any(recipient => !string.IsNullOrWhiteSpace(recipient)))
+        if (ValidRecipients.Of(message.Recipients).Count == 0)
             errors.Add(new ValidationError("recipients", "A notificação deve possuir ao menos um destinatário."));
 
         if (string.IsNullOrWhiteSpace(message.Content))

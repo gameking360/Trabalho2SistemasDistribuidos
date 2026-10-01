@@ -14,8 +14,7 @@ public sealed class InMemoryStockRepository : IStockRepository
     {
         lock (_sync)
         {
-            // A entrega do RabbitMQ é "pelo menos uma vez": uma queda entre o processamento e o ack faz a mensagem
-            // ser reentregue. O registro do messageId evita aplicar a mesma movimentação duas vezes.
+            // Entrega "pelo menos uma vez": o messageId evita aplicar uma reentrega duas vezes.
             if (!_appliedMovements.Add(movementId))
                 return StockApplyResult.Duplicate;
 

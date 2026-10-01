@@ -119,9 +119,9 @@ O Stock Worker também é um produtor: publica a `NotificationMessage` em `comme
 
 | Worker | Fila | Prefetch | O que faz |
 |---|---|---|---|
-| Commerce.StockWorker | `movements.queue` | 1 | Valida, aplica a movimentação no estoque (entrada soma, saída subtrai) e, com `notify = true`, publica a notificação |
+| Commerce.StockWorker | `movements.queue` | 1 | Valida, aplica a movimentação no estoque (entrada soma, saída subtrai) e, com `notify = true`, publica a notificação; movimentação inválida gera uma notificação de rejeição |
 | Commerce.NotificationWorker | `notifications.queue` | 10 | Valida e simula a entrega, registrando tipo, destinatários, conteúdo e messageId |
-| Commerce.RetryWorker | `retry.queue` | 50 | Aguarda o horário de cada envelope e devolve a mensagem ao fluxo original; hospeda a limpeza opcional da DLQ |
+| Commerce.RetryWorker | `retry.queue` | 50 | Aguarda o horário de cada envelope e devolve a mensagem ao fluxo original; hospeda a limpeza periódica da DLQ |
 
 Todos usam o mesmo consumidor base (`RabbitMqConsumerService`): reconexão, declaração da topologia, prefetch e **ack manual somente após o desfecho da mensagem**. Os workers de estoque e notificação compartilham o `MessageConsumerService<TMessage>`, que encaminha falhas para retry/DLQ; cada worker só implementa o seu `IMessageHandler<TMessage>`.
 
@@ -183,6 +183,8 @@ sequenceDiagram
 ```
 
 A **entrada de compra** segue o mesmo caminho; quando `notify = false` o fluxo termina no processamento do estoque.
+
+**Movimentação inválida** (por exemplo, publicada por outro produtor com tipo `Transferencia`): o Stock Worker não toca no estoque e, se houver destinatários com `notify = true`, publica uma notificação `MovimentacaoEstoqueRejeitada` com o motivo — uma única vez, na 1ª tentativa. A mensagem segue então a regra geral de falhas (retry e DLQ).
 
 ### Notificação
 
@@ -258,7 +260,7 @@ flowchart TD
     T6 -->|DeadLetterMessage| DLX{{"commerce.dlx"}}
     DLX -->|message.dead-letter| DLQ[("dead-letter.queue")]
     DLQ --> M["Análise manual no RabbitMQ Management"]
-    DLQ -.->|"opcional, desabilitada por padrão"| CL["Limpeza periódica por retenção"]
+    DLQ -.->|"a cada Interval"| CL["Limpeza periódica por retenção"]
 ```
 
 Após a 6ª falha a mensagem sai do fluxo normal e vai para `commerce.dlx` → `dead-letter.queue` como uma `DeadLetterMessage` com tudo o que é preciso para a análise: `messageId`, payload original e atual, fila/exchange/routing key de origem, número de tentativas, motivo do erro, datas da primeira e da última tentativa, **tempo total de processamento** (`processingDurationMs`) e `payloadChanged`.
@@ -269,17 +271,19 @@ Mensagens malformadas (JSON inválido, tipo de movimento inválido) seguem a mes
 
 ### Limpeza periódica da DLQ
 
-A DLQ **não é limpa automaticamente** durante a execução normal. A limpeza é uma rotina de manutenção do Retry Worker, **desabilitada por padrão**:
+Para não ocupar recursos indefinidamente, o Retry Worker limpa a DLQ periodicamente:
 
 ```json
 "DeadLetterCleanup": {
-  "Enabled": false,
+  "Enabled": true,
   "Interval": "1.00:00:00",
   "RetentionPeriod": "30.00:00:00"
 }
 ```
 
-Quando habilitada (`DeadLetterCleanup__Enabled=true`), roda a cada `Interval` e remove apenas mensagens isoladas há mais tempo que `RetentionPeriod`, registrando cada remoção no log (`[messageId] Removida da DLQ pela limpeza periódica...`). Mensagens sem timestamp nunca são removidas automaticamente.
+A rotina roda a cada `Interval` e remove apenas mensagens isoladas há mais tempo que `RetentionPeriod`, registrando cada remoção no log (`[messageId] Removida da DLQ pela limpeza periódica...`), para que as recentes continuem disponíveis para análise. Mensagens sem timestamp nunca são removidas automaticamente. Para desligar: `DeadLetterCleanup__Enabled=false`.
+
+**Limpeza manual:** no RabbitMQ Management, abra `dead-letter.queue` e use **Purge Messages** (ou `rabbitmqctl purge_queue -p commerce dead-letter.queue`).
 
 ## 8. Confiabilidade e tolerância a falhas
 
@@ -343,7 +347,7 @@ A escrita em `amq.default` é necessária porque o retry de mensagens originadas
 | `Retry__MaxAttempts` / `Retry__DelayIncrement` | `6` / `00:00:02` | Regra do retry |
 | `Stock__SimulatedProcessingTime` | `00:00:00.500` | Duração simulada da rotina de estoque |
 | `FailureSimulation__Enabled` | `false` (`true` em Development) | Marcadores de falha para demonstração |
-| `DeadLetterCleanup__Enabled` / `__Interval` / `__RetentionPeriod` | `false` / 1 dia / 30 dias | Limpeza periódica da DLQ |
+| `DeadLetterCleanup__Enabled` / `__Interval` / `__RetentionPeriod` | `true` / 1 dia / 30 dias | Limpeza periódica da DLQ |
 
 ## 11. Como executar
 
@@ -538,6 +542,7 @@ Outras situações de falha:
 - **Consumidor fora do ar:** pare o Stock Worker (`Ctrl+C`), envie movimentações e veja-as acumuladas em `movements.queue`; ao subir o worker elas são processadas em ordem.
 - **RabbitMQ indisponível:** `docker compose stop rabbitmq` → a API responde 503 e os workers registram a perda de conexão; `docker compose start rabbitmq` → todos reconectam sozinhos e as mensagens persistidas continuam lá.
 - **Mensagem malformada:** no Management, publique em `commerce.movements` (routing key `movement.process`) um corpo inválido; ela passa pelo retry e chega à DLQ com o conteúdo bruto e o motivo.
+- **Movimentação inválida com notificação:** publique, do mesmo jeito, uma movimentação com `"movementType": "Transferencia"`, `"notify": true` e `"recipients": ["cliente@exemplo.com"]`; o Notification Worker registra a notificação `MovimentacaoEstoqueRejeitada` e a movimentação termina na DLQ.
 - **Retry acumulado:** pare o Retry Worker para ver os envelopes parados na `retry.queue`; ao religá-lo, os que já passaram do horário são devolvidos imediatamente.
 
 ## 15. Como visualizar no RabbitMQ Management
@@ -576,8 +581,8 @@ Os logs usam templates estruturados (`{MessageId}`, `{Queue}`, `{Attempt}`, `{Er
 dotnet test
 ```
 
-- **Unitários** (`tests/Commerce.Tests/Unit`, sem dependências externas): validação da movimentação, cálculo do intervalo de retry (2/4/6/8/10 s), limite de 6 tentativas, criação do envelope de retry e da mensagem da DLQ, identificação da fila original (inclusive o retorno direto à fila em origens fanout), cabeçalhos de retry, decisão de enviar ou não a notificação, idempotência do estoque, caso de uso da API e mapeamento 202/400/503.
-- **Integração** (`tests/Commerce.Tests/Integration`, RabbitMQ real): publicação persistente em fila durável, consumo pelo Stock Worker, publicação e consumo de notificação, retry com sucesso na 2ª tentativa, DLQ após 6 falhas (estoque e notificação), mensagem aguardando com o consumidor fora do ar e limpeza da DLQ por retenção.
+- **Unitários** (`tests/Commerce.Tests/Unit`, sem dependências externas): validação da movimentação, cálculo do intervalo de retry (2/4/6/8/10 s), limite de 6 tentativas, criação do envelope de retry e da mensagem da DLQ, identificação da fila original (inclusive o retorno direto à fila em origens fanout), cabeçalhos de retry, decisão de enviar ou não a notificação (inclusive a de rejeição), idempotência do estoque, caso de uso da API e mapeamento 202/400/503.
+- **Integração** (`tests/Commerce.Tests/Integration`, RabbitMQ real): publicação persistente em fila durável, consumo pelo Stock Worker, publicação e consumo de notificação, notificação de rejeição de movimentação inválida, retry com sucesso na 2ª tentativa, DLQ após 6 falhas (estoque e notificação), mensagem aguardando com o consumidor fora do ar e limpeza da DLQ por retenção.
 
 Os testes de integração sobem os **workers reais** dentro do processo de teste, em um virtual host exclusivo (`commerce-integration-tests`) criado e removido via API do Management — os dados da demonstração não são tocados. O retry roda na escala de 100 ms (100, 200, 300, 400, 500 ms) para o teste ser rápido. Com o RabbitMQ fora do ar, esses testes são marcados como ignorados (*skipped*) com a instrução `docker compose up -d`.
 
@@ -605,7 +610,8 @@ dotnet test --filter "FullyQualifiedName~Integration"   # apenas integração (r
 | `mandatory: true` | Uma mensagem sem rota vira erro explícito em vez de ser descartada pelo broker |
 | DLX nativo nas filas de trabalho | Rede de segurança: rejeições sem requeue vão para a DLQ, nunca para o lixo |
 | Topologia declarada pelas aplicações | Idempotente, versionada com o código e independente da ordem de inicialização |
-| Limpeza da DLQ desabilitada por padrão | A DLQ existe para análise manual; remover mensagens é decisão operacional, nunca efeito colateral |
+| Limpeza da DLQ por retenção | Atende à limpeza periódica da proposta sem apagar mensagens ainda em análise; cada remoção fica registrada no log |
+| Rejeição notificada ao solicitante | Movimentação inválida é um erro que o usuário precisa saber; a notificação sai uma única vez e a mensagem segue para a DLQ |
 | Um consumidor base + `IMessageHandler<T>` | Conexão, ack, retry e DLQ escritos uma única vez (DRY); cada worker só tem a regra do seu processamento |
 | Sem MediatR, CQRS, MassTransit | Não agregam ao problema; o fluxo fica explícito para quem lê |
 

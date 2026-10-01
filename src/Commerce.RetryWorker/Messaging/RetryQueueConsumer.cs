@@ -23,8 +23,7 @@ public sealed class RetryQueueConsumer(
     ILogger<RetryQueueConsumer> logger)
     : RabbitMqConsumerService(connectionProvider, options, logger)
 {
-    // Cada mensagem aguarda o seu próprio horário sem bloquear as demais (uma espera de 10s não atrasa uma de 2s).
-    // Durante a espera a mensagem continua sem ack: se o worker cair, ela volta para a retry.queue.
+    // Esperas em paralelo: uma de 10s não atrasa uma de 2s. Sem ack durante a espera, nada se perde se o worker cair.
     private const ushort MaxPendingRetries = 50;
 
     protected override string QueueName => Queues.Retry;
@@ -81,8 +80,7 @@ public sealed class RetryQueueConsumer(
             // Tratado abaixo como envelope inválido.
         }
 
-        // Sem a fila de origem não há para onde devolver a mensagem: ela é rejeitada e o RabbitMQ a desvia para
-        // a DLQ (x-dead-letter-exchange da retry.queue), preservando o conteúdo para análise.
+        // Sem origem não há para onde devolver: a rejeição leva a mensagem à DLQ pelo x-dead-letter-exchange.
         Logger.LogError("[{MessageId}] Envelope de retry inválido (sem fila de origem ou payload); enviado para a DLQ",
             delivery.MessageId);
         envelope = null;

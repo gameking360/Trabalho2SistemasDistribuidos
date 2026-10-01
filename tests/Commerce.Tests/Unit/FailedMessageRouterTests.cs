@@ -59,7 +59,7 @@ public sealed class FailedMessageRouterTests
             : new RetryMetadata(failedAttempt - 1, TestMessages.Now.AddSeconds(-10), Exchanges.Movements, RoutingKeys.MovementProcess, body);
 
         var delivery = new DeliveryContext("movimentacao-1", Queues.Movements, Exchanges.Movements, RoutingKeys.MovementProcess,
-            body, false, retry);
+            body, retry);
 
         return new FailedDelivery(delivery, TestMessages.Now, "Falha simulada");
     }

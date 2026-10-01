@@ -10,14 +10,12 @@ public sealed record DeliveryContext(
     string Exchange,
     string RoutingKey,
     byte[] Body,
-    bool Redelivered,
     RetryMetadata Retry)
 {
     /// <summary>Número desta tentativa de processamento (1 = primeira entrega).</summary>
     public int Attempt => Retry.PreviousAttempts + 1;
 
-    // Depois de um retry, exchange, routing key e payload originais vêm dos cabeçalhos, porque a entrega atual
-    // pode ter chegado pelo default exchange (retorno direto para a fila de origem).
+    // Após um retry a entrega pode chegar pelo default exchange; a origem real vem dos cabeçalhos.
     public string OriginalExchange => Retry.OriginalExchange ?? Exchange;
 
     public string OriginalRoutingKey => Retry.OriginalRoutingKey ?? RoutingKey;
@@ -26,7 +24,7 @@ public sealed record DeliveryContext(
 
     public static DeliveryContext From(BasicDeliverEventArgs args, string queue)
     {
-        // A memória do corpo pertence ao client e só é válida durante o callback; a cópia é usada no retry/DLQ.
+        // O corpo só é válido durante o callback do client; a cópia é usada no retry/DLQ.
         var body = args.Body.ToArray();
 
         return new DeliveryContext(
@@ -35,7 +33,6 @@ public sealed record DeliveryContext(
             args.Exchange,
             args.RoutingKey,
             body,
-            args.Redelivered,
             RetryHeaders.Read(args.BasicProperties.Headers));
     }
 
@@ -57,7 +54,7 @@ public sealed record DeliveryContext(
         }
         catch (JsonException)
         {
-            // Corpo inválido: segue com um identificador gerado para manter a rastreabilidade nos logs.
+            // Corpo inválido: usa um identificador gerado para manter a rastreabilidade.
         }
 
         return $"sem-message-id-{Guid.NewGuid():N}";

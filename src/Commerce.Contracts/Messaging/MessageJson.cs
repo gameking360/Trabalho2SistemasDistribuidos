@@ -10,8 +10,7 @@ public static class MessageJson
 {
     public static JsonSerializerOptions Options { get; } = new(JsonSerializerDefaults.Web)
     {
-        // Mantém acentos legíveis (ex.: "Saída") no RabbitMQ Management e nos logs.
-        // O conteúdo das mensagens nunca é renderizado como HTML, então o escape relaxado é seguro aqui.
+        // Acentos legíveis no Management e nos logs; o conteúdo nunca é renderizado como HTML.
         Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
     };
 

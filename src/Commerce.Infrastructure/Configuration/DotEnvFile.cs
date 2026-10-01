@@ -1,9 +1,7 @@
 namespace Commerce.Infrastructure.Configuration;
 
 /// <summary>
-/// Carrega o arquivo .env que fica ao lado do docker-compose.yml como variáveis de ambiente do processo.
-/// Assim <c>dotnet run</c> usa as mesmas credenciais do container sem que elas sejam gravadas em appsettings.
-/// Variáveis já definidas no ambiente têm precedência e nunca são sobrescritas.
+/// Carrega o .env ao lado do docker-compose.yml como variáveis de ambiente, sem sobrescrever as já definidas.
 /// </summary>
 public static class DotEnvFile
 {

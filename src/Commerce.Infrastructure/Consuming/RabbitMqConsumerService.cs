@@ -65,15 +65,12 @@ public abstract class RabbitMqConsumerService(
             stoppingToken);
 
         await MessagingTopology.DeclareAsync(channel, stoppingToken);
-
-        // O broker entrega no máximo PrefetchCount mensagens sem ack a este consumidor.
         await channel.BasicQosAsync(prefetchSize: 0, prefetchCount: PrefetchCount, global: false, stoppingToken);
 
         var channelClosed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         channel.ChannelShutdownAsync += (_, _) =>
         {
-            // Quedas de conexão são recuperadas pelo client (canal e consumidor incluídos). Só recriamos o canal
-            // quando ele é fechado isoladamente, por exemplo depois de um erro de protocolo.
+            // Quedas de conexão são recuperadas pelo client; só recria o canal quando ele fecha sozinho.
             if (connection.IsOpen)
                 channelClosed.TrySetResult();
             return Task.CompletedTask;
@@ -145,7 +142,7 @@ public abstract class RabbitMqConsumerService(
         }
     }
 
-    protected static async Task WaitAsync(TimeSpan delay, CancellationToken cancellationToken)
+    private static async Task WaitAsync(TimeSpan delay, CancellationToken cancellationToken)
     {
         try
         {

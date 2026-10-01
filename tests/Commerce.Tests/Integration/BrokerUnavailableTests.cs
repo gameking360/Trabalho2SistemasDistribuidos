@@ -32,7 +32,7 @@ public sealed class BrokerUnavailableTests
         var exception = await Assert.ThrowsAsync<MessagePublishException>(() => publisher.PublishAsync(
             OutgoingMessage.Json(Exchanges.Movements, RoutingKeys.MovementProcess, movement.MessageId.ToString(), movement)));
 
-        Assert.Equal(movement.MessageId.ToString(), exception.MessageId);
+        Assert.Contains(movement.MessageId.ToString(), exception.Message);
         Assert.Contains("RabbitMQ indisponível", exception.Message);
     }
 }

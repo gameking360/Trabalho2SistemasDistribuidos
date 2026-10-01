@@ -42,7 +42,7 @@ public sealed class MessageConsumerService<TMessage>(
 
             await using var scope = scopeFactory.CreateAsyncScope();
             var handler = scope.ServiceProvider.GetRequiredService<IMessageHandler<TMessage>>();
-            await handler.HandleAsync(message, new MessageContext(delivery.MessageId, delivery.Attempt), cancellationToken);
+            await handler.HandleAsync(message, new MessageContext(delivery.Attempt), cancellationToken);
         }
         catch (Exception exception) when (exception is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
         {
@@ -63,9 +63,8 @@ public sealed class MessageConsumerService<TMessage>(
     {
         try
         {
+            // Só confirma a original depois do publisher confirm do envio para retry/DLQ.
             await failureRouter.RouteAsync(failure, cancellationToken);
-
-            // A mensagem original só é confirmada depois que o envio para retry/DLQ foi confirmado pelo broker.
             return DeliveryOutcome.Ack;
         }
         catch (MessagePublishException exception)
@@ -74,7 +73,7 @@ public sealed class MessageConsumerService<TMessage>(
                 "[{MessageId}] Não foi possível encaminhar a falha para retry/DLQ; a mensagem volta para {Queue} em {DelaySeconds}s",
                 failure.Delivery.MessageId, settings.Queue, RetryDelay.TotalSeconds);
 
-            // Espera antes de devolver para não entrar em loop de reentregas enquanto o broker se recupera.
+            // Evita um loop de reentregas enquanto o broker se recupera.
             await Task.Delay(RetryDelay, cancellationToken);
             return DeliveryOutcome.Requeue;
         }

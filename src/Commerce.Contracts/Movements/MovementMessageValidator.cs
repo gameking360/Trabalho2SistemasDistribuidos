@@ -75,7 +75,7 @@ public static class MovementMessageValidator
             }
         }
 
-        if (notify && (recipients is null || !recipients.Any(recipient => !string.IsNullOrWhiteSpace(recipient))))
+        if (notify && ValidRecipients.Of(recipients).Count == 0)
             errors.Add(new ValidationError("recipients", "Informe ao menos um destinatário quando notify = true."));
     }
 }

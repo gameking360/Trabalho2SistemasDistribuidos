@@ -5,6 +5,7 @@ using Commerce.Infrastructure.Publishing;
 using Commerce.NotificationWorker;
 using Commerce.NotificationWorker.Delivery;
 using Commerce.StockWorker;
+using Commerce.StockWorker.Notifications;
 using Commerce.StockWorker.Stock;
 using Commerce.Tests.Integration.Infrastructure;
 using Commerce.Tests.Support;
@@ -39,6 +40,24 @@ public sealed class ConsumptionFlowTests(RabbitMqFixture rabbit) : IAsyncLifetim
         Assert.Equal(new[] { "compras@exemplo.com" }, notification.Recipients);
         Assert.Contains("SKU-NOTIFICA", notification.Content);
         Assert.Equal(5, worker.Services.GetRequiredService<IStockRepository>().GetBalance("SKU-NOTIFICA"));
+    }
+
+    [RabbitMqFact]
+    public async Task StockWorker_InvalidMovement_NotifiesRejectionAndSendsMessageToRetry()
+    {
+        await using var worker = await rabbit.StartWorkerAsync((services, configuration) => services.AddStockWorker(configuration));
+        var movement = TestMessages.Movement(movementType: "Transferencia", notify: true, recipients: ["cliente@exemplo.com"]);
+
+        await rabbit.Publisher.PublishAsync(
+            OutgoingMessage.Json(Exchanges.Movements, RoutingKeys.MovementProcess, movement.MessageId.ToString(), movement));
+
+        var delivered = await rabbit.TakeMessageAsync(Queues.Notifications, Timeout);
+        var notification = MessageJson.Deserialize<NotificationMessage>(delivered.Body.Span);
+        Assert.Equal(MovementNotificationFactory.RejectedType, notification.NotificationType);
+        Assert.Contains("Transferencia", notification.Content);
+
+        var retry = await rabbit.TakeMessageAsync(Queues.Retry, Timeout);
+        Assert.Equal(movement.MessageId.ToString(), retry.BasicProperties.MessageId);
     }
 
     [RabbitMqFact]

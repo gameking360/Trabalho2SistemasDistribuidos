@@ -23,7 +23,7 @@ public sealed class MovementMessageHandlerTests
     {
         var movement = TestMessages.Movement(MovementTypes.Exit, notify: true, recipients: ["cliente@exemplo.com"]);
 
-        await CreateHandler().HandleAsync(movement, ContextFor(movement), CancellationToken.None);
+        await CreateHandler().HandleAsync(movement, Context(), CancellationToken.None);
 
         Assert.Equal(-2, _stock.GetBalance("SKU-001"));
 
@@ -32,7 +32,7 @@ public sealed class MovementMessageHandlerTests
 
         var notification = _publisher.Deserialize<NotificationMessage>(published);
         Assert.Equal(new[] { "cliente@exemplo.com" }, notification.Recipients);
-        Assert.Equal(MovementNotificationFactory.NotificationType, notification.NotificationType);
+        Assert.Equal(MovementNotificationFactory.ProcessedType, notification.NotificationType);
         Assert.Contains("SKU-001", notification.Content);
         Assert.NotEqual(Guid.Empty, notification.MessageId);
     }
@@ -42,7 +42,7 @@ public sealed class MovementMessageHandlerTests
     {
         var movement = TestMessages.Movement(MovementTypes.Entry, notify: false);
 
-        await CreateHandler().HandleAsync(movement, ContextFor(movement), CancellationToken.None);
+        await CreateHandler().HandleAsync(movement, Context(), CancellationToken.None);
 
         Assert.Equal(2, _stock.GetBalance("SKU-001"));
         Assert.Empty(_publisher.Messages);
@@ -54,10 +54,39 @@ public sealed class MovementMessageHandlerTests
         var movement = TestMessages.Movement(notify: true, recipients: [], items: [TestMessages.Item(quantity: 0)]);
 
         var exception = await Assert.ThrowsAsync<MessageValidationException>(
-            () => CreateHandler().HandleAsync(movement, ContextFor(movement), CancellationToken.None));
+            () => CreateHandler().HandleAsync(movement, Context(), CancellationToken.None));
 
         Assert.StartsWith("Mensagem inválida", exception.Message);
         Assert.Equal(0, _stock.GetBalance("SKU-001"));
+        Assert.Empty(_publisher.Messages);
+    }
+
+    [Fact]
+    public async Task HandleAsync_InvalidMovementWithRecipients_NotifiesRejectionAndThrows()
+    {
+        var movement = TestMessages.Movement(movementType: "Transferencia", notify: true, recipients: ["cliente@exemplo.com"]);
+
+        await Assert.ThrowsAsync<MessageValidationException>(
+            () => CreateHandler().HandleAsync(movement, Context(), CancellationToken.None));
+
+        var published = Assert.Single(_publisher.Messages);
+        Assert.Equal(Exchanges.Notifications, published.Exchange);
+
+        var notification = _publisher.Deserialize<NotificationMessage>(published);
+        Assert.Equal(MovementNotificationFactory.RejectedType, notification.NotificationType);
+        Assert.Equal(new[] { "cliente@exemplo.com" }, notification.Recipients);
+        Assert.Contains("Transferencia", notification.Content);
+        Assert.Equal(0, _stock.GetBalance("SKU-001"));
+    }
+
+    [Fact]
+    public async Task HandleAsync_InvalidMovementOnRetry_DoesNotNotifyAgain()
+    {
+        var movement = TestMessages.Movement(movementType: "Transferencia", notify: true, recipients: ["cliente@exemplo.com"]);
+
+        await Assert.ThrowsAsync<MessageValidationException>(
+            () => CreateHandler().HandleAsync(movement, Context(attempt: 2), CancellationToken.None));
+
         Assert.Empty(_publisher.Messages);
     }
 
@@ -68,7 +97,7 @@ public sealed class MovementMessageHandlerTests
             items: [TestMessages.Item(code: FailureSimulator.PermanentFailureMarker)]);
 
         await Assert.ThrowsAsync<SimulatedFailureException>(
-            () => CreateHandler(simulateFailures: true).HandleAsync(movement, ContextFor(movement), CancellationToken.None));
+            () => CreateHandler(simulateFailures: true).HandleAsync(movement, Context(), CancellationToken.None));
 
         Assert.Empty(_publisher.Messages);
     }
@@ -81,8 +110,8 @@ public sealed class MovementMessageHandlerTests
         var handler = CreateHandler(simulateFailures: true);
 
         await Assert.ThrowsAsync<SimulatedFailureException>(
-            () => handler.HandleAsync(movement, ContextFor(movement, attempt: 1), CancellationToken.None));
-        await handler.HandleAsync(movement, ContextFor(movement, attempt: 2), CancellationToken.None);
+            () => handler.HandleAsync(movement, Context(attempt: 1), CancellationToken.None));
+        await handler.HandleAsync(movement, Context(attempt: 2), CancellationToken.None);
 
         Assert.Equal(4, _stock.GetBalance(FailureSimulator.TemporaryFailureMarker));
     }
@@ -93,8 +122,8 @@ public sealed class MovementMessageHandlerTests
         var movement = TestMessages.Movement(MovementTypes.Entry);
         var handler = CreateHandler();
 
-        await handler.HandleAsync(movement, ContextFor(movement), CancellationToken.None);
-        await handler.HandleAsync(movement, ContextFor(movement), CancellationToken.None);
+        await handler.HandleAsync(movement, Context(), CancellationToken.None);
+        await handler.HandleAsync(movement, Context(), CancellationToken.None);
 
         Assert.Equal(2, _stock.GetBalance("SKU-001"));
     }
@@ -107,6 +136,5 @@ public sealed class MovementMessageHandlerTests
         new FixedTimeProvider(TestMessages.Now),
         NullLogger<MovementMessageHandler>.Instance);
 
-    private static MessageContext ContextFor(MovementMessage movement, int attempt = 1) =>
-        new(movement.MessageId.ToString(), attempt);
+    private static MessageContext Context(int attempt = 1) => new(attempt);
 }

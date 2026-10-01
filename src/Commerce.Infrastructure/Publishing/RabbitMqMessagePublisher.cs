@@ -30,8 +30,7 @@ public sealed class RabbitMqMessagePublisher(
         {
             var channel = await GetChannelAsync(timeout.Token);
 
-            // mandatory: true faz o broker devolver (basic.return) uma mensagem sem fila de destino em vez de
-            // descartá-la; com o rastreamento de confirms habilitado isso vira PublishException logo abaixo.
+            // mandatory: mensagem sem fila de destino volta do broker (PublishException) em vez de ser descartada.
             await channel.BasicPublishAsync(message.Exchange, message.RoutingKey, mandatory: true,
                 CreateProperties(message), message.Body, timeout.Token);
         }
@@ -77,9 +76,7 @@ public sealed class RabbitMqMessagePublisher(
 
             var connection = await connectionProvider.GetConnectionAsync(cancellationToken);
 
-            // Se a conexão está aberta e o canal não, ele foi fechado por um erro do próprio canal; a recuperação
-            // automática só reabre canais quando a conexão cai, então criamos outro. Com a conexão fora do ar,
-            // o canal atual é mantido para ser recuperado e a publicação falha (e é reportada) enquanto isso.
+            // Canal fechado com a conexão aberta não é recuperado automaticamente: cria outro.
             if (_channel is not null && connection.IsOpen)
             {
                 await _channel.DisposeAsync();

@@ -14,8 +14,7 @@ namespace Commerce.Infrastructure.DependencyInjection;
 public static class MessagingServiceCollectionExtensions
 {
     /// <summary>
-    /// Registra conexão, publicação com confirms e o roteamento de falhas (retry/DLQ).
-    /// A aplicação não inicia se as credenciais do RabbitMQ não estiverem configuradas.
+    /// Registra conexão e publicação com confirms. A aplicação não inicia sem as credenciais do RabbitMQ.
     /// </summary>
     public static IServiceCollection AddRabbitMqMessaging(this IServiceCollection services, IConfiguration configuration)
     {
@@ -31,30 +30,23 @@ public static class MessagingServiceCollectionExtensions
                 "(variáveis de ambiente ou arquivo .env na raiz; veja .env.example).")
             .ValidateOnStart();
 
-        services.AddOptions<RetryOptions>()
-            .Bind(configuration.GetSection(RetryOptions.SectionName))
-            .Validate(options => options.MaxAttempts >= 1 && options.DelayIncrement > TimeSpan.Zero,
-                "Retry:MaxAttempts deve ser maior que zero e Retry:DelayIncrement deve ser positivo.")
-            .ValidateOnStart();
-
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddSingleton<IRabbitMqConnectionProvider, RabbitMqConnectionProvider>();
         services.TryAddSingleton<IMessagePublisher, RabbitMqMessagePublisher>();
-        services.TryAddSingleton<RetryPolicy>();
-        services.TryAddSingleton<FailureEnvelopeFactory>();
-        services.TryAddSingleton<FailedMessageRouter>();
 
         return services;
     }
 
     /// <summary>
-    /// Registra um consumidor (hosted service) para a fila informada e o handler que processa cada mensagem.
+    /// Registra um consumidor (hosted service) para a fila informada, o handler de cada mensagem e o
+    /// roteamento de falhas (retry/DLQ).
     /// </summary>
     public static IServiceCollection AddMessageConsumer<TMessage, THandler>(
         this IServiceCollection services, ConsumerSettings<TMessage> settings)
         where TMessage : class
         where THandler : class, IMessageHandler<TMessage>
     {
+        services.AddFailureRouting();
         services.AddSingleton(settings);
         services.AddScoped<IMessageHandler<TMessage>, THandler>();
         services.AddHostedService<MessageConsumerService<TMessage>>();
@@ -68,5 +60,21 @@ public static class MessagingServiceCollectionExtensions
         services.TryAddSingleton<FailureSimulator>();
 
         return services;
+    }
+
+    private static void AddFailureRouting(this IServiceCollection services)
+    {
+        if (services.Any(descriptor => descriptor.ServiceType == typeof(FailedMessageRouter)))
+            return;
+
+        services.AddOptions<RetryOptions>()
+            .BindConfiguration(RetryOptions.SectionName)
+            .Validate(options => options.MaxAttempts >= 1 && options.DelayIncrement > TimeSpan.Zero,
+                "Retry:MaxAttempts deve ser maior que zero e Retry:DelayIncrement deve ser positivo.")
+            .ValidateOnStart();
+
+        services.TryAddSingleton<RetryPolicy>();
+        services.TryAddSingleton<FailureEnvelopeFactory>();
+        services.TryAddSingleton<FailedMessageRouter>();
     }
 }

@@ -17,11 +17,10 @@ public static class RetryRoute
             JsonPayload.ToBody(envelope.CurrentPayload), RetryHeaders.Create(envelope));
     }
 
-    public static (string Exchange, string RoutingKey) ResolveTarget(RetryEnvelope envelope) =>
+    // Republicar num fanout duplicaria a entrega nas demais filas assinantes; por isso a mensagem volta
+    // apenas para a fila de origem, pelo default exchange.
+    private static (string Exchange, string RoutingKey) ResolveTarget(RetryEnvelope envelope) =>
         MessagingTopology.IsFanout(envelope.OriginalExchange)
-            // Republicar num exchange fanout entregaria a mensagem de novo a TODAS as filas assinantes
-            // (ex.: e-mail e SMS no futuro), duplicando entregas que já deram certo. Nesse caso ela volta apenas
-            // para a fila de origem, pelo default exchange ("" + nome da fila como routing key).
             ? (string.Empty, envelope.OriginalQueue)
             : (envelope.OriginalExchange, envelope.OriginalRoutingKey);
 }

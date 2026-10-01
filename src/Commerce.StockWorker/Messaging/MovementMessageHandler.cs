@@ -1,5 +1,6 @@
 using Commerce.Contracts.Messaging;
 using Commerce.Contracts.Movements;
+using Commerce.Contracts.Notifications;
 using Commerce.Contracts.Validation;
 using Commerce.Infrastructure.Consuming;
 using Commerce.Infrastructure.Publishing;
@@ -20,26 +21,46 @@ public sealed class MovementMessageHandler(
     {
         var errors = MovementMessageValidator.Validate(movement);
         if (errors.Count > 0)
-            throw new MessageValidationException(errors);
+        {
+            var exception = new MessageValidationException(errors);
+            await NotifyRejectionAsync(movement, exception.Message, context, cancellationToken);
+            throw exception;
+        }
 
         failureSimulator.ThrowIfRequested(movement.Items.Select(item => item.Code), context.Attempt);
 
         await stock.ApplyAsync(movement, cancellationToken);
 
-        // A notificação só é gerada depois que o estoque foi atualizado com sucesso. Se a publicação falhar,
-        // a movimentação vai para o retry e, na nova tentativa, o estoque não é reaplicado (idempotência).
+        // Notifica só depois do estoque aplicado; num retry o estoque não é reaplicado (idempotência).
         if (!movement.Notify)
         {
             logger.LogInformation("[{MessageId}] notify = false: nenhuma notificação gerada", movement.MessageId);
             return;
         }
 
-        var notification = MovementNotificationFactory.Create(movement, timeProvider.GetUtcNow());
+        await PublishAsync(movement.MessageId, MovementNotificationFactory.Processed(movement, timeProvider.GetUtcNow()),
+            cancellationToken);
+    }
+
+    // O solicitante é avisado uma única vez; a mensagem inválida segue para retry/DLQ como qualquer falha.
+    private async Task NotifyRejectionAsync(
+        MovementMessage movement, string reason, MessageContext context, CancellationToken cancellationToken)
+    {
+        if (context.Attempt > 1 || !movement.Notify)
+            return;
+
+        var notification = MovementNotificationFactory.Rejected(movement, reason, timeProvider.GetUtcNow());
+        if (notification.Recipients.Count > 0)
+            await PublishAsync(movement.MessageId, notification, cancellationToken);
+    }
+
+    private async Task PublishAsync(Guid movementId, NotificationMessage notification, CancellationToken cancellationToken)
+    {
         await publisher.PublishAsync(
             OutgoingMessage.Json(Exchanges.Notifications, RoutingKeys.Notifications, notification.MessageId.ToString(), notification),
             cancellationToken);
 
-        logger.LogInformation("[{MessageId}] Notificação {NotificationId} publicada em {Exchange} para {RecipientCount} destinatário(s)",
-            movement.MessageId, notification.MessageId, Exchanges.Notifications, notification.Recipients.Count);
+        logger.LogInformation("[{MessageId}] Notificação {NotificationId} ({NotificationType}) publicada em {Exchange} para {RecipientCount} destinatário(s)",
+            movementId, notification.MessageId, notification.NotificationType, Exchanges.Notifications, notification.Recipients.Count);
     }
 }
