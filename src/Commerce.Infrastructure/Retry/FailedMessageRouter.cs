@@ -5,7 +5,7 @@ using Microsoft.Extensions.Logging;
 namespace Commerce.Infrastructure.Retry;
 
 /// <summary>
-/// Encaminha uma entrega que falhou para <c>retry.queue</c> enquanto houver tentativas, ou para a DLQ.
+/// Encaminha uma falha recuperável para <c>retry.queue</c> enquanto houver tentativas; falhas permanentes e tentativas esgotadas vão para a DLQ.
 /// Só retorna depois do publisher confirm, para que o consumidor possa então confirmar a mensagem original.
 /// </summary>
 public sealed class FailedMessageRouter(
@@ -16,7 +16,7 @@ public sealed class FailedMessageRouter(
 {
     public async Task RouteAsync(FailedDelivery failure, CancellationToken cancellationToken)
     {
-        if (retryPolicy.ShouldDeadLetter(failure.Delivery.Attempt))
+        if (!failure.IsRetryable || retryPolicy.ShouldDeadLetter(failure.Delivery.Attempt))
         {
             await SendToDeadLetterAsync(failure, cancellationToken);
             return;
