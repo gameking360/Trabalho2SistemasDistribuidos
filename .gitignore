@@ -1,0 +1,23 @@
+# Credenciais locais (use .env.example como modelo)
+.env
+*.env
+!.env.example
+
+# Build
+bin/
+obj/
+artifacts/
+TestResults/
+*.trx
+
+# IDEs
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+*.DotSettings.user
+
+# Sistema
+.DS_Store
+Thumbs.db

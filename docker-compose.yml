@@ -1,0 +1,30 @@
+name: commerce-messaging
+
+services:
+  rabbitmq:
+    image: rabbitmq:4.3-management
+    container_name: commerce-rabbitmq
+    # Nome de nó fixo: os dados do volume (filas duráveis e mensagens persistentes) sobrevivem à recriação do container.
+    hostname: commerce-rabbitmq
+    ports:
+      - "5672:5672"     # AMQP (aplicações)
+      - "15672:15672"   # RabbitMQ Management: http://localhost:15672
+    environment:
+      # Credenciais vêm do arquivo .env (fora do Git). Na primeira inicialização o RabbitMQ cria o virtual host
+      # e o usuário com permissões (configure/write/read) apenas nesse vhost; o usuário guest não é criado.
+      RABBITMQ_DEFAULT_USER: ${RabbitMq__UserName:?Defina RabbitMq__UserName no arquivo .env (copie de .env.example)}
+      RABBITMQ_DEFAULT_PASS: ${RabbitMq__Password:?Defina RabbitMq__Password no arquivo .env (copie de .env.example)}
+      RABBITMQ_DEFAULT_VHOST: ${RabbitMq__VirtualHost:-commerce}
+    volumes:
+      - ./rabbitmq/rabbitmq.conf:/etc/rabbitmq/conf.d/90-commerce.conf:ro
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "check_port_connectivity"]
+      interval: 10s
+      timeout: 10s
+      retries: 6
+      start_period: 20s
+    restart: unless-stopped
+
+volumes:
+  rabbitmq-data:

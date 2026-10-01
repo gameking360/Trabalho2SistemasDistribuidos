@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>Contratos das mensagens (DTOs), nomes de exchanges/filas/routing keys e validações compartilhadas.</Description>
+    <!-- Os comentários XML dos contratos também aparecem nos schemas do Swagger. -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);1591</NoWarn>
+  </PropertyGroup>
+
+</Project>

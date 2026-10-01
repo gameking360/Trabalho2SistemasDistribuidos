@@ -1,0 +1,42 @@
+{
+  "messageId": "11111111-2222-3333-4444-555555555555",
+  "originalQueue": "movements.queue",
+  "originalExchange": "commerce.movements",
+  "originalRoutingKey": "movement.process",
+  "attempts": 6,
+  "errorReason": "Falha simulada permanente (FALHA-PERMANENTE).",
+  "firstAttemptAt": "2026-10-01T00:38:17.1982478+00:00",
+  "lastAttemptAt": "2026-10-01T00:38:47.7205623+00:00",
+  "processingDurationMs": 30522,
+  "payloadChanged": false,
+  "originalPayload": {
+    "messageId": "11111111-2222-3333-4444-555555555555",
+    "requestedAt": "2026-10-01T00:38:17.1651157+00:00",
+    "movementType": "Saída",
+    "notify": false,
+    "recipients": [],
+    "items": [
+      {
+        "code": "FALHA-PERMANENTE",
+        "description": "Item que sempre falha",
+        "quantity": 1,
+        "value": 99.9
+      }
+    ]
+  },
+  "currentPayload": {
+    "messageId": "11111111-2222-3333-4444-555555555555",
+    "requestedAt": "2026-10-01T00:38:17.1651157+00:00",
+    "movementType": "Saída",
+    "notify": false,
+    "recipients": [],
+    "items": [
+      {
+        "code": "FALHA-PERMANENTE",
+        "description": "Item que sempre falha",
+        "quantity": 1,
+        "value": 99.9
+      }
+    ]
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "retry-attempt": 1,
+  "retry-first-attempt-at": "2026-10-01T00:43:59.7197869+00:00",
+  "retry-original-exchange": "commerce.movements",
+  "retry-original-routing-key": "movement.process",
+  "retry-original-payload": "{\"messageId\":\"12467268-0728-45ec-b8a1-7ca1304ca4b2\",\"requestedAt\":\"2026-10-01T00:43:59.7036083+00:00\",\"movementType\":\"Saída\",\"notify\":true,\"recipients\":[\"cliente@exemplo.com\"],\"items\":[{\"code\":\"FALHA-TEMPORARIA\",\"description\":\"Tênis de corrida\",\"quantity\":1,\"value\":349.9}]}"
+}

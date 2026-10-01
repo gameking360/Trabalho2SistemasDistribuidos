@@ -1,0 +1,9 @@
+{
+  "messageId": "3a1e0ff5-d41f-4001-ae21-7ec432924c6d",
+  "notificationType": "MovimentacaoEstoqueProcessada",
+  "recipients": [
+    "cliente@exemplo.com"
+  ],
+  "content": "Movimentação de Saída processada no estoque. Itens: SKU-001 (Camiseta básica) x 2; SKU-002 (Boné) x 1. Valor total: R$ 159,70.",
+  "createdAt": "2026-10-01T00:38:02.7122989+00:00"
+}

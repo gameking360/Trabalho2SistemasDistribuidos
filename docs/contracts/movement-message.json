@@ -1,0 +1,23 @@
+{
+  "messageId": "6982ad3d-4254-49c8-8454-a1f9a72a65c3",
+  "requestedAt": "2026-10-01T00:38:02.1864205+00:00",
+  "movementType": "Saída",
+  "notify": true,
+  "recipients": [
+    "cliente@exemplo.com"
+  ],
+  "items": [
+    {
+      "code": "SKU-001",
+      "description": "Camiseta básica",
+      "quantity": 2,
+      "value": 59.9
+    },
+    {
+      "code": "SKU-002",
+      "description": "Boné",
+      "quantity": 1,
+      "value": 39.9
+    }
+  ]
+}

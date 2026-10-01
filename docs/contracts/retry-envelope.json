@@ -1,0 +1,47 @@
+{
+  "messageId": "12467268-0728-45ec-b8a1-7ca1304ca4b2",
+  "originalQueue": "movements.queue",
+  "originalExchange": "commerce.movements",
+  "originalRoutingKey": "movement.process",
+  "attempt": 1,
+  "maxAttempts": 6,
+  "originalPayload": {
+    "messageId": "12467268-0728-45ec-b8a1-7ca1304ca4b2",
+    "requestedAt": "2026-10-01T00:43:59.7036083+00:00",
+    "movementType": "Saída",
+    "notify": true,
+    "recipients": [
+      "cliente@exemplo.com"
+    ],
+    "items": [
+      {
+        "code": "FALHA-TEMPORARIA",
+        "description": "Tênis de corrida",
+        "quantity": 1,
+        "value": 349.9
+      }
+    ]
+  },
+  "currentPayload": {
+    "messageId": "12467268-0728-45ec-b8a1-7ca1304ca4b2",
+    "requestedAt": "2026-10-01T00:43:59.7036083+00:00",
+    "movementType": "Saída",
+    "notify": true,
+    "recipients": [
+      "cliente@exemplo.com"
+    ],
+    "items": [
+      {
+        "code": "FALHA-TEMPORARIA",
+        "description": "Tênis de corrida",
+        "quantity": 1,
+        "value": 349.9
+      }
+    ]
+  },
+  "payloadChanged": false,
+  "errorReason": "Falha simulada temporária (FALHA-TEMPORARIA) na tentativa 1.",
+  "firstAttemptAt": "2026-10-01T00:43:59.7197869+00:00",
+  "lastAttemptAt": "2026-10-01T00:43:59.7830358+00:00",
+  "nextAttemptAt": "2026-10-01T00:44:01.7830358+00:00"
+}

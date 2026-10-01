@@ -1,0 +1,97 @@
+### Exemplos de chamadas (Visual Studio, Rider ou extensão REST Client do VS Code).
+### Pré-requisitos: docker compose up -d e os quatro projetos rodando (veja o README).
+
+@api = http://localhost:5080
+
+### 1. Conclusão de pedido de venda (Saída) com notificação
+# Fluxo: API -> commerce.movements -> movements.queue -> Stock Worker -> commerce.notifications -> notifications.queue -> Notification Worker
+POST {{api}}/api/sales-orders/complete
+Content-Type: application/json
+
+{
+  "notify": true,
+  "recipients": ["cliente@exemplo.com"],
+  "items": [
+    { "code": "SKU-001", "description": "Camiseta básica", "quantity": 2, "value": 59.90 },
+    { "code": "SKU-002", "description": "Boné", "quantity": 1, "value": 39.90 }
+  ]
+}
+
+### 2. Entrada de itens de compra (Entrada) sem notificação
+POST {{api}}/api/purchases/entries
+Content-Type: application/json
+
+{
+  "notify": false,
+  "items": [
+    { "code": "SKU-001", "description": "Camiseta básica", "quantity": 10, "value": 35.00 },
+    { "code": "SKU-002", "description": "Boné", "quantity": 5, "value": 20.00 }
+  ]
+}
+
+### 3. Reenvio seguro com Idempotency-Key: execute duas vezes; o estoque é atualizado apenas uma vez
+POST {{api}}/api/purchases/entries
+Content-Type: application/json
+Idempotency-Key: 6f1c9a52-3d2b-4c8e-9a51-2b7d4e8f1a90
+
+{
+  "notify": false,
+  "items": [
+    { "code": "SKU-003", "description": "Meia esportiva", "quantity": 3, "value": 12.50 }
+  ]
+}
+
+### 4. Erro temporário: falha na 1ª tentativa, vai para a retry.queue e é processada após 2 segundos
+POST {{api}}/api/purchases/entries
+Content-Type: application/json
+
+{
+  "notify": false,
+  "items": [
+    { "code": "FALHA-TEMPORARIA", "description": "Item que falha na primeira tentativa", "quantity": 1, "value": 10.00 }
+  ]
+}
+
+### 5. Erros consecutivos: 6 falhas (esperas de 2s, 4s, 6s, 8s e 10s) e isolamento na dead-letter.queue
+POST {{api}}/api/sales-orders/complete
+Content-Type: application/json
+
+{
+  "notify": false,
+  "items": [
+    { "code": "FALHA-PERMANENTE", "description": "Item que sempre falha", "quantity": 1, "value": 99.90 }
+  ]
+}
+
+### 6. Falha na notificação: o estoque é processado; a notificação passa pelo retry e termina na DLQ
+POST {{api}}/api/sales-orders/complete
+Content-Type: application/json
+
+{
+  "notify": true,
+  "recipients": ["FALHA-PERMANENTE"],
+  "items": [
+    { "code": "SKU-001", "description": "Camiseta básica", "quantity": 1, "value": 59.90 }
+  ]
+}
+
+### 7. Validação: 400 com mensagens claras por campo (nada é publicado)
+POST {{api}}/api/sales-orders/complete
+Content-Type: application/json
+
+{
+  "notify": true,
+  "recipients": [],
+  "items": [
+    { "code": "", "description": "Item sem código", "quantity": 0, "value": 10.00 }
+  ]
+}
+
+### 8. Validação: movimentação sem itens
+POST {{api}}/api/purchases/entries
+Content-Type: application/json
+
+{
+  "notify": false,
+  "items": []
+}
