@@ -86,6 +86,26 @@ public sealed class RetryAndDeadLetterTests(RabbitMqFixture rabbit) : IAsyncLife
     }
 
     [RabbitMqFact]
+    public async Task InvalidMovement_IsIsolatedInDeadLetterQueueOnFirstAttempt()
+    {
+        await using var stockWorker = await rabbit.StartWorkerAsync((services, configuration) => services.AddStockWorker(configuration));
+        await using var retryWorker = await rabbit.StartWorkerAsync((services, configuration) => services.AddRetryWorker(configuration));
+        var movement = TestMessages.Movement(movementType: "Transferencia");
+
+        await rabbit.Publisher.PublishAsync(
+            OutgoingMessage.Json(Exchanges.Movements, RoutingKeys.MovementProcess, movement.MessageId.ToString(), movement));
+
+        var dead = await rabbit.TakeMessageAsync(Queues.DeadLetter, Timeout);
+        var deadLetter = MessageJson.Deserialize<DeadLetterMessage>(dead.Body.Span);
+
+        Assert.Equal(movement.MessageId.ToString(), deadLetter.MessageId);
+        Assert.Equal(1, deadLetter.Attempts);
+        Assert.Contains("Mensagem inválida", deadLetter.ErrorReason);
+        Assert.Equal(0u, await rabbit.CountMessagesAsync(Queues.Retry));
+        Assert.Equal(0u, await rabbit.CountMessagesAsync(Queues.Movements));
+    }
+
+    [RabbitMqFact]
     public async Task NotificationFailure_IsRetriedOnItsOwnQueue_AndIsolatedInDeadLetterQueue()
     {
         await using var notificationWorker = await rabbit.StartWorkerAsync((services, configuration) => services.AddNotificationWorker(configuration));

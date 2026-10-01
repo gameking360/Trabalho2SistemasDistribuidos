@@ -21,11 +21,13 @@ public sealed class MovementMessageHandlerTests
     [Fact]
     public async Task HandleAsync_NotifyTrue_UpdatesStockAndPublishesNotification()
     {
+        await CreateHandler().HandleAsync(
+            TestMessages.Movement(MovementTypes.Entry, notify: false), Context(), CancellationToken.None);
         var movement = TestMessages.Movement(MovementTypes.Exit, notify: true, recipients: ["cliente@exemplo.com"]);
 
         await CreateHandler().HandleAsync(movement, Context(), CancellationToken.None);
 
-        Assert.Equal(-2, _stock.GetBalance("SKU-001"));
+        Assert.Equal(0, _stock.GetBalance("SKU-001"));
 
         var published = Assert.Single(_publisher.Messages);
         Assert.Equal(Exchanges.Notifications, published.Exchange);
@@ -46,6 +48,39 @@ public sealed class MovementMessageHandlerTests
 
         Assert.Equal(2, _stock.GetBalance("SKU-001"));
         Assert.Empty(_publisher.Messages);
+    }
+
+    [Fact]
+    public async Task HandleAsync_ExitWithoutAvailableStock_RejectsMovementWithoutChangingBalance()
+    {
+        var movement = TestMessages.Movement(MovementTypes.Exit);
+
+        var exception = await Assert.ThrowsAsync<InsufficientStockException>(
+            () => CreateHandler().HandleAsync(movement, Context(), CancellationToken.None));
+
+        Assert.Equal("SKU-001", exception.ItemCode);
+        Assert.Equal(0, exception.Balance);
+        Assert.Equal(2, exception.RequestedQuantity);
+        Assert.Equal(0, _stock.GetBalance("SKU-001"));
+    }
+
+    [Fact]
+    public async Task HandleAsync_ExitWithInsufficientStockForAnItem_DoesNotPartiallyApplyMovement()
+    {
+        await CreateHandler().HandleAsync(
+            TestMessages.Movement(MovementTypes.Entry, items: [TestMessages.Item(quantity: 3)]),
+            Context(), CancellationToken.None);
+        var movement = TestMessages.Movement(MovementTypes.Exit, items:
+        [
+            TestMessages.Item(quantity: 2),
+            TestMessages.Item(code: "SKU-002", quantity: 2)
+        ]);
+
+        await Assert.ThrowsAsync<InsufficientStockException>(
+            () => CreateHandler().HandleAsync(movement, Context(), CancellationToken.None));
+
+        Assert.Equal(3, _stock.GetBalance("SKU-001"));
+        Assert.Equal(0, _stock.GetBalance("SKU-002"));
     }
 
     [Fact]

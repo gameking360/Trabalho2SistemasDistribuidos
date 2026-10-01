@@ -51,7 +51,20 @@ public sealed class FailedMessageRouterTests
         Assert.Equal(Queues.Movements, deadLetter.OriginalQueue);
     }
 
-    private static FailedDelivery Failure(int failedAttempt)
+    [Fact]
+    public async Task RouteAsync_NonRetryableFailure_IsolatesMessageInDeadLetterQueueOnFirstAttempt()
+    {
+        await _router.RouteAsync(Failure(1, isRetryable: false), CancellationToken.None);
+
+        var published = Assert.Single(_publisher.Messages);
+        Assert.Equal(Exchanges.DeadLetter, published.Exchange);
+        Assert.Equal(RoutingKeys.DeadLetter, published.RoutingKey);
+
+        var deadLetter = _publisher.Deserialize<DeadLetterMessage>(published);
+        Assert.Equal(1, deadLetter.Attempts);
+    }
+
+    private static FailedDelivery Failure(int failedAttempt, bool isRetryable = true)
     {
         var body = MessageJson.Serialize(TestMessages.Movement());
         var retry = failedAttempt == 1
@@ -61,6 +74,6 @@ public sealed class FailedMessageRouterTests
         var delivery = new DeliveryContext("movimentacao-1", Queues.Movements, Exchanges.Movements, RoutingKeys.MovementProcess,
             body, retry);
 
-        return new FailedDelivery(delivery, TestMessages.Now, "Falha simulada");
+        return new FailedDelivery(delivery, TestMessages.Now, "Falha simulada", isRetryable);
     }
 }

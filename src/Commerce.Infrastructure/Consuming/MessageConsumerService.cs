@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Commerce.Contracts.Messaging;
+using Commerce.Contracts.Validation;
 using Commerce.Infrastructure.Configuration;
 using Commerce.Infrastructure.Connection;
 using Commerce.Infrastructure.Publishing;
@@ -51,7 +52,8 @@ public sealed class MessageConsumerService<TMessage>(
                 delivery.MessageId, delivery.Attempt, retryPolicy.MaxAttempts, settings.Queue, exception.GetType().Name, reason);
             Logger.LogDebug(exception, "[{MessageId}] Detalhes da falha", delivery.MessageId);
 
-            return await RouteFailureAsync(new FailedDelivery(delivery, startedAt, reason), cancellationToken);
+            var isRetryable = exception is not (NonRetryableMessageException or JsonException);
+            return await RouteFailureAsync(new FailedDelivery(delivery, startedAt, reason, isRetryable), cancellationToken);
         }
 
         Logger.LogInformation("[{MessageId}] Sucesso no processamento da {MessageDescription} (tentativa {Attempt})",

@@ -15,11 +15,26 @@ public sealed class InMemoryStockRepository : IStockRepository
         lock (_sync)
         {
             // Entrega "pelo menos uma vez": o messageId evita aplicar uma reentrega duas vezes.
-            if (!_appliedMovements.Add(movementId))
+            if (_appliedMovements.Contains(movementId))
                 return StockApplyResult.Duplicate;
 
-            var changes = new List<StockBalanceChange>(deltas.Count);
-            foreach (var delta in deltas)
+            var aggregatedDeltas = deltas
+                .GroupBy(delta => delta.ItemCode, StringComparer.Ordinal)
+                .Select(group => new StockDelta(group.Key, group.Sum(delta => delta.Quantity)))
+                .ToList();
+
+            foreach (var delta in aggregatedDeltas)
+            {
+                var previous = _balances.GetValueOrDefault(delta.ItemCode);
+                var current = previous + delta.Quantity;
+                if (current < 0)
+                    throw new InsufficientStockException(delta.ItemCode, previous, -delta.Quantity);
+            }
+
+            _appliedMovements.Add(movementId);
+
+            var changes = new List<StockBalanceChange>(aggregatedDeltas.Count);
+            foreach (var delta in aggregatedDeltas)
             {
                 var previous = _balances.GetValueOrDefault(delta.ItemCode);
                 var current = previous + delta.Quantity;
